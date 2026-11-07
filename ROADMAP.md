@@ -11,19 +11,23 @@ behaviour regressed. Reading the code and agreeing with it is not enough. That i
 Legend: `[ok]` implemented and pinned by a named test -- `[part]` partial, with what is
 missing stated -- `[ ]` not implemented -- `[no]` deliberate non-goal.
 
+A Where cell marked `(to be written)` names the test that will pin the row once it exists; no
+such test has been written yet, and the row cannot leave `[ ]` until it has. The Milestone
+column places the row on the ladder in section 2, and `-` means it is not placed yet.
+
 Update the affected row in the same commit that changes the behaviour. A row and its test
 drift apart within one release, and the document becomes useless exactly when it is needed.
 
 ## 1. Obligations
 
-| Obligation | Spec | Status | Where |
-|---|---|---|---|
-| `ris.subscribe()` | design | `[ ]` | `tests/test_obligations.py::subscribe` |
-| `routeviews.follow()` | design | `[ ]` | `tests/test_obligations.py::follow` |
-| `mrt.iter_updates()` | RFC 6396 | `[ ]` | `tests/test_obligations.py::iter_updates` |
-| `state.checkpoint()` | design | `[ ]` | `tests/test_obligations.py::checkpoint` |
-| `state.resume()` | design | `[ ]` | `tests/test_obligations.py::resume` |
-| `budget.policy()` | design | `[ ]` | `tests/test_obligations.py::policy` |
+| Obligation | Spec | Status | Where | Milestone |
+|---|---|---|---|---|
+| `ris.subscribe()` | design | `[ ]` | `tests/test_obligations.py::test_subscribe` (to be written) | M2 |
+| `routeviews.follow()` | design | `[ ]` | `tests/test_obligations.py::test_follow` (to be written) | M3 |
+| `mrt.iter_updates()` | RFC 6396 | `[ ]` | `tests/test_obligations.py::test_iter_updates` (to be written) | M1 |
+| `state.checkpoint()` | design | `[ ]` | `tests/test_obligations.py::test_checkpoint` (to be written) | M3 |
+| `state.resume()` | design | `[ ]` | `tests/test_obligations.py::test_resume` (to be written) | M3 |
+| `budget.policy()` | design | `[ ]` | `tests/test_obligations.py::test_policy` (to be written) | M4 |
 
 ## 2. Milestones
 
@@ -52,7 +56,7 @@ the code existing. Coverage in `pyproject.toml` ratchets in the same commit.
 
 ## 5. Open questions
 
-- none recorded yet
+- M5 (a replay fixture so downstream tests never touch the network) has no row: add one, or drop the rung
 
 ## 6. Publication checklist
 

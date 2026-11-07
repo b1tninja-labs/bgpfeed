@@ -19,4 +19,7 @@ jobs:
       # declarations are floors. A file is written by a script rather than shell
       # redirection so the step behaves identically on a self-hosted runner.
       - run: python tools/write_freeze.py requirements-audit.txt
-      - run: python -m pip_audit --progress-spinner off -r requirements-audit.txt
+      # The audit reads the versions already installed above and installs nothing itself:
+      # --no-deps and --disable-pip stop pip-audit from resolving the list in a fresh
+      # environment, which is how it used to end up cloning a repository instead of auditing.
+      - run: python -m pip_audit --progress-spinner off --no-deps --disable-pip -r requirements-audit.txt
