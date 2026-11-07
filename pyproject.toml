@@ -2,7 +2,7 @@
 # Declared explicitly rather than relying on pip's legacy setuptools fallback: with no
 # build-system table pip injects an unpinned setuptools environment, so a build is
 # neither reproducible nor hermetic.
-requires = ["hatchling>1.25"]
+requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
@@ -13,7 +13,7 @@ dynamic = ["version"]
 description = "Live and archive upstream feeds: RIPE RIS websocket streaming and RouteViews BGP2K MRT deltas, with checkpointing and a normalised event model shared with bmpkit"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">3.12"
+requires-python = ">=3.12"
 authors = [{ name = "Justin Capella" }]
 keywords = ["ris", "routeviews", "mrt", "bgp", "streaming", "monitoring", "looking-glass"]
 classifiers = [
@@ -98,8 +98,9 @@ line-length = 100
 select = ["E", "W", "F", "I", "B", "N", "UP", "SIM", "C4", "PT", "RUF", "S", "RET", "ARG"]
 ignore = [
   "E501",  # line length is the formatter's job
-  "S101",  # assert belongs in tests, and this repo has a written policy on it
 ]
+# S101 is not ignored here: `python -O` strips an assert, so one in package code is a check that
+# vanishes in exactly the build that ships without the test suite watching.
 
 [tool.ruff.lint.per-file-ignores]
 # S101 in tests is the policy, S311 is a seeded generator rather than a token, and a

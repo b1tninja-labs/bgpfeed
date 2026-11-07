@@ -4,7 +4,7 @@ Short version: four gates, and they all have to pass on Linux and Windows.
 
 ```bash
 ruff check . && ruff format --check .
-mypy bgpfeed
+mypy bgpfeed tests
 pytest -q --cov
 python -O -m pytest -q
 ```

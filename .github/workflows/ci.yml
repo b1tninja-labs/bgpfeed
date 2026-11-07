@@ -16,7 +16,7 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
-      - run: mypy bgpfeed
+      - run: mypy bgpfeed tests
       # check_dist inspects a built wheel, so the wheel is built here rather than assumed to exist.
       # The step looked green for months on one machine because an earlier manual build had left a
       # wheel in dist/: a cache impersonating a check, and the first CI run this project ever had
