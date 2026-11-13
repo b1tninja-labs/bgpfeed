@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from asnkit import mrt as asnkit_mrt
+from asnkit import rib as asnkit_rib
 from asnkit.history import open_dump
 from pathattr import message as bgp
 from pathattr import nlri as bgp_nlri
@@ -40,14 +41,16 @@ from .budget import DropCounter
 from .model import Event, EventKind, Network, Peer
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
     from typing import IO
 
 __all__ = [
     "MalformedRecordError",
     "Stats",
+    "events_from_rib",
     "events_from_stream",
     "iter_updates",
+    "snapshot_withdrawals",
 ]
 
 _ALL_FAMILIES = frozenset({(1, 1), (1, 2), (2, 1), (2, 2)})
@@ -165,7 +168,7 @@ def _count(stats: Stats | None, reason: str) -> None:
 
 
 def events_from_stream(
-    stream: IO[bytes], *, source: str, stats: Stats | None = None
+    stream: IO[bytes], *, source: str, stats: Stats | None = None, tolerant: bool = False
 ) -> Iterator[Event]:
     """Yield the events of an MRT updates stream (see the module docstring).
 
@@ -173,10 +176,28 @@ def events_from_stream(
     (``asnkit.mrt.MrtError``) are not recoverable and propagate: after a bad length the next
     record cannot be found. A BGP4MP record that is malformed inside raises
     :class:`MalformedRecordError`, or is counted in ``stats`` and skipped when one is given.
+
+    ``tolerant`` reads what real archives hold (asnkit's ``iter_bgp4mp(tolerant=True)``): a BGP4MP
+    message with a bad Length or trailing octets, and a record whose fixed fields cannot be read,
+    are counted as malformed with their reason and skipped, and the reading goes on. It needs a
+    ``stats`` to count in, so that nothing is skipped without a trace (``ValueError`` otherwise).
     """
-    for item in asnkit_mrt.iter_bgp4mp(stream):
+    if tolerant and stats is None:
+        raise ValueError("a tolerant reading needs a Stats to count what it skips")
+    unreadable: list[asnkit_mrt.MrtRecord] = []
+
+    def refused(record: asnkit_mrt.MrtRecord, reason: str) -> None:
+        unreadable.append(record)
+        _bad(stats, f"BGP4MP record: {reason}")
+
+    for item in asnkit_mrt.iter_bgp4mp(
+        stream, tolerant=tolerant, on_error=refused if tolerant else None
+    ):
         if stats is not None:
             stats.records += 1
+        if unreadable and item is unreadable[-1]:
+            unreadable.pop()
+            continue
         if isinstance(item, asnkit_mrt.MrtRecord):
             _count(stats, f"record:type{item.type}/subtype{item.subtype}")
             continue
@@ -195,6 +216,9 @@ def events_from_stream(
             continue
         if stats is not None:
             stats.messages += 1
+        if item.defect is not None:
+            _bad(stats, f"BGP4MP message: {item.defect}")
+            continue
         try:
             decoded = bgp.decode(
                 item.message,
@@ -218,7 +242,9 @@ def events_from_stream(
         yield from produced
 
 
-def iter_updates(path: pathlib.Path, *, stats: Stats | None = None) -> Iterator[Event]:
+def iter_updates(
+    path: pathlib.Path, *, stats: Stats | None = None, tolerant: bool = False
+) -> Iterator[Event]:
     """Yield the events of the MRT updates file at ``path`` (RFC 6396 section 4.4, RFC 8050).
 
     The file may be plain, ``.gz`` or ``.bz2`` (asnkit's ``open_dump`` chooses by suffix). The
@@ -228,4 +254,73 @@ def iter_updates(path: pathlib.Path, *, stats: Stats | None = None) -> Iterator[
     """
     path = pathlib.Path(path)
     with open_dump(path) as stream:
-        yield from events_from_stream(stream, source=path.name, stats=stats)
+        yield from events_from_stream(stream, source=path.name, stats=stats, tolerant=tolerant)
+
+
+def events_from_rib(
+    stream: IO[bytes], *, source: str, stats: Stats | None = None
+) -> Iterator[Event]:
+    """Yield one ANNOUNCE event per RIB Entry of a TABLE_DUMP_V2 snapshot (RFC 6396 section 4.3).
+
+    The read is asnkit's :func:`asnkit.rib.iter_rib_entries`. Each event is stamped with the dump
+    time (the MRT record timestamp, which is one value for the whole snapshot; the entry's own
+    Originated Time is when the peer learned the route, not when it was observed, and is not an
+    event time), carries the row's peer, prefix, Path Identifier and raw AS_PATH, and has
+    four-octet AS numbers (RFC 6396 section 4.3.4 and RFC 6793). A row whose attributes cannot be
+    framed is still announced, with no AS_PATH, and counted as ``rib:attribute-framing`` in
+    ``stats``. A record that is not a RIB row source is counted ``rib:skipped`` and its reason
+    kept in ``stats.examples``; with no ``stats`` it raises ``asnkit.mrt.MrtError``.
+    """
+
+    def skipped(_record: asnkit_mrt.MrtRecord, reason: str) -> None:
+        _count(stats, "rib:skipped")
+        if stats is not None and len(stats.examples) < _EXAMPLES:
+            stats.examples.append(reason)
+
+    for row in asnkit_rib.iter_rib_entries(stream, on_skip=skipped if stats else None):
+        if row.framing_error is not None:
+            _count(stats, "rib:attribute-framing")
+        event = Event(
+            _moment(row.timestamp, None),
+            source,
+            Peer(row.peer.address, row.peer.asn),
+            EventKind.ANNOUNCE,
+            prefix=row.prefix,
+            path_id=row.path_id,
+            as_path=row.as_path,
+        )
+        if stats is not None:
+            stats.records += 1
+            stats.events += 1
+        yield event
+
+
+def snapshot_withdrawals(previous: Iterable[Event], current: Iterable[Event]) -> Iterator[Event]:
+    """WITHDRAW events for what a later snapshot no longer holds.
+
+    The policy for a route in an earlier snapshot and not in the later one (decided here, since no
+    spec says): it was withdrawn at some time between the two dumps, so a WITHDRAW with the reason
+    ``"absent-from-snapshot"`` is emitted at the later dump's time. That covers a peer that
+    disappeared entirely as well as one that dropped a prefix; nothing distinguishes the two
+    from the snapshots alone, and a peer absence is also reported (by the caller comparing peers)
+    when it matters. A route is identified by peer address and AS, prefix and Path Identifier. The
+    later snapshot's time is the time of its first event; an empty ``current`` has no time and
+    yields ``time=None`` events. Order follows ``previous``.
+    """
+    held = list(current)
+    present = {(e.peer, e.prefix, e.path_id) for e in held}
+    when = held[0].time if held else None
+    source = held[0].source if held else ""
+    for old in previous:
+        if old.kind is not EventKind.ANNOUNCE:
+            continue
+        if (old.peer, old.prefix, old.path_id) not in present:
+            yield Event(
+                when,
+                source or old.source,
+                old.peer,
+                EventKind.WITHDRAW,
+                prefix=old.prefix,
+                path_id=old.path_id,
+                reason="absent-from-snapshot",
+            )

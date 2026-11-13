@@ -16,6 +16,7 @@ import ipaddress
 import struct
 
 import pytest
+from asnkit.mrt import MrtError
 
 from bgpfeed.budget import DropCounter
 from bgpfeed.model import Event, EventKind, Peer
@@ -207,6 +208,33 @@ def test_a_malformed_update_raises_without_stats_and_is_counted_with_them():
     assert "exceeds 32" in stats.examples[0]
 
 
+def test_a_tolerant_reading_counts_defective_records_and_goes_on():
+    """Row ``mrt.tolerant-bgp4mp``: trailing octets, a cut message and an unreadable header are
+    malformed records with a reason, the good records around them still give their events."""
+    longer = FIG16_UPDATE + b"\x00"
+    cut = FIG16_UPDATE[:12]
+    unreadable = struct.pack(">IHHI", TS, 16, 4, 12) + struct.pack(">IIHH", 1, 2, 1, 7)
+    data = (
+        bgp4mp(4, FIG16_UPDATE)
+        + bgp4mp(4, longer)
+        + bgp4mp(4, cut)
+        + unreadable
+        + bgp4mp(4, FIG16_UPDATE)
+    )
+    with pytest.raises(MrtError, match="disagrees"):
+        run(data)
+    with pytest.raises(ValueError, match="needs a Stats"):
+        run(data, tolerant=True)
+    stats = Stats()
+    events = run(data, stats=stats, tolerant=True)
+    assert [e.kind for e in events] == [EventKind.ANNOUNCE, EventKind.ANNOUNCE]
+    assert (stats.records, stats.messages, stats.events, stats.malformed) == (5, 4, 2, 3)
+    assert stats.examples[0].startswith("BGP4MP message: BGP message Length")
+    assert any("shorter" in e for e in stats.examples)
+    assert any("Address Family 7" in e for e in stats.examples)
+    assert stats.unmapped.snapshot() == {}
+
+
 def test_an_mp_attribute_that_cannot_be_read_is_counted_not_guessed():
     short = bytes([0x80, 14, 3]) + struct.pack(">HB", 2, 1)  # shorter than 5 octets
     stats = Stats()
@@ -245,3 +273,85 @@ def test_iter_updates_is_incremental():
     data = bgp4mp(4, FIG16_UPDATE) * 3 + b"\x00\x01"  # a truncated header after three records
     reader = events_from_stream(io.BytesIO(data), source="x")
     assert next(reader).kind is EventKind.ANNOUNCE  # no error yet: later records are unread
+
+
+# -- TABLE_DUMP_V2 snapshots (row mrt.events-from-rib) ---------------------------------------------------
+
+
+def _rec(rtype: int, subtype: int, body: bytes, when: int) -> bytes:
+    return struct.pack(">IHHI", when, rtype, subtype, len(body)) + body
+
+
+def _table(peers: list[tuple[str, int]], when: int) -> bytes:
+    body = bytes([198, 51, 100, 4]) + struct.pack(">HH", 0, len(peers))
+    for address, asn in peers:
+        body += bytes([2]) + bytes([10, 0, 0, 1]) + ipaddress.ip_address(address).packed
+        body += struct.pack(">I", asn)
+    return _rec(13, 1, body, when)
+
+
+def _rib(prefix: str, rows: list[tuple[int, list[int]]], when: int) -> bytes:
+    net = ipaddress.ip_network(prefix)
+    entries = b""
+    for peer, path in rows:
+        value = bytes([2, len(path)]) + b"".join(struct.pack(">I", a) for a in path)
+        attrs = bytes([0x40, 1, 1, 0, 0x40, 2, len(value)]) + value
+        entries += struct.pack(">HIH", peer, when - 5, len(attrs)) + attrs
+    body = struct.pack(">I", 0) + bytes([net.prefixlen])
+    body += net.network_address.packed[: (net.prefixlen + 7) // 8]
+    body += struct.pack(">H", len(rows)) + entries
+    return _rec(13, 2, body, when)
+
+
+def _snapshot(when: int, routes: dict[str, list[tuple[int, list[int]]]]) -> bytes:
+    peers = [("192.0.2.1", 64501), ("192.0.2.2", 64502)]
+    return _table(peers, when) + b"".join(_rib(p, rows, when) for p, rows in routes.items())
+
+
+def test_rib_snapshot_events():
+    from bgpfeed.mrt import events_from_rib, snapshot_withdrawals
+
+    first = _snapshot(
+        TS,
+        {
+            "203.0.113.0/24": [(0, [64501, 64496]), (1, [64502, 64496])],
+            "198.51.100.0/24": [(1, [64502, 64497])],
+        },
+    )
+    stats = Stats()
+    events = list(events_from_rib(io.BytesIO(first), source="bview", stats=stats))
+    assert [(str(e.peer.address), e.peer.asn, str(e.prefix)) for e in events] == [
+        ("192.0.2.1", 64501, "203.0.113.0/24"),
+        ("192.0.2.2", 64502, "203.0.113.0/24"),
+        ("192.0.2.2", 64502, "198.51.100.0/24"),
+    ]
+    assert {e.kind for e in events} == {EventKind.ANNOUNCE}
+    assert {e.time for e in events} == {WHEN}, "the dump time, not the entries' originated time"
+    assert events[0].as_path == bytes([2, 2]) + struct.pack(">II", 64501, 64496)
+    assert (stats.records, stats.events, stats.malformed) == (3, 3, 0)
+
+    # one hour later peer 2 has lost the second prefix and peer 1 has gone from the first
+    later = _snapshot(TS + 3600, {"203.0.113.0/24": [(1, [64502, 64496])]})
+    after = list(events_from_rib(io.BytesIO(later), source="bview"))
+    gone = list(snapshot_withdrawals(events, after))
+    assert [(str(e.peer.address), str(e.prefix)) for e in gone] == [
+        ("192.0.2.1", "203.0.113.0/24"),
+        ("192.0.2.2", "198.51.100.0/24"),
+    ]
+    assert {e.kind for e in gone} == {EventKind.WITHDRAW}
+    assert {e.reason for e in gone} == {"absent-from-snapshot"}
+    assert {e.time for e in gone} == {WHEN + datetime.timedelta(hours=1)}
+    assert list(snapshot_withdrawals(after, after)) == []
+
+
+def test_a_rib_snapshot_with_a_foreign_record_is_counted_or_raises():
+    from asnkit.mrt import MrtError
+
+    from bgpfeed.mrt import events_from_rib
+
+    data = _snapshot(TS, {"203.0.113.0/24": [(0, [64501])]}) + _rec(13, 99, b"xx", TS)
+    with pytest.raises(MrtError):
+        list(events_from_rib(io.BytesIO(data), source="b"))
+    stats = Stats()
+    assert len(list(events_from_rib(io.BytesIO(data), source="b", stats=stats))) == 1
+    assert stats.unmapped.snapshot() == {"rib:skipped": 1}
