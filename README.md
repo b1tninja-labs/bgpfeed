@@ -43,12 +43,13 @@ document, which is the honest grain size for a plan. See [docs/rfc-map.md](docs/
 | Document | Status | Published | What it gives this project |
 |---|---|---|---|
 | RFC 6396 | Proposed Standard | 2011-10 | MRT, the format RouteViews publishes its updates in |
+| RFC 8050 | Proposed Standard | 2017-05 | MRT with ADD-PATH: the BGP4MP `_ADDPATH` subtypes |
 | RIPE RIS live API | operational practice | - | the websocket protocol, viewer selection and message shape |
 | RouteViews archive layout | operational practice | - | per collector hourly directories, file naming and retention |
 
 ### Errata watch
 
-- RFC 6396 carries 2 verified errata.
+- RFC 6396 carries 2 verified errata, both in Appendix A example bytes.
 - RIS and RouteViews are operational services, not specifications: pin the endpoint and message version in tests and expect change without notice.
 
 ## Module layout
@@ -58,9 +59,16 @@ document, which is the honest grain size for a plan. See [docs/rfc-map.md](docs/
 | `model` | the common event and update objects shared with bmpkit |
 | `ris` | the websocket protocol, viewers and resubscription |
 | `routeviews` | archive discovery, delta polling and checkpoints |
-| `mrt` | UPDATE_FILE and TABLE_DUMP reading via asnkit |
+| `mrt` | BGP4MP-to-event mapping over asnkit's MRT codec |
 | `state` | resume points and gap accounting per source |
 | `budget` | politeness: concurrency caps, jitter and backoff |
+
+## Dependencies
+
+Standard library only. If one were ever needed, the `cryptography` package is the only third-party
+package permitted, and only for cryptographic primitives. Parsers (MRT through asnkit, BGP
+attributes through pathattr) are ours and are used by sibling path. A WebSocket client is an open
+owner decision recorded in ROADMAP.md.
 
 ## What it does not do
 

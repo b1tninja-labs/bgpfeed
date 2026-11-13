@@ -54,16 +54,17 @@ rather than merely incomplete.
 3. **Normative text is never paraphrased from memory.** Fetch it with `rfclib` and
    cite the section. If the text you fetch does not say what the obligation claims,
    the obligation is wrong: fix the roadmap row and say so in the commit.
-4. **Dependencies.** `pyproject.toml` here declares no runtime dependencies. Adding a runtime
-   dependency needs a paragraph of justification in `docs/strategy.md` explaining
-   why the standard library is not enough.
+4. **Dependencies.** `pyproject.toml` here declares no runtime dependencies. Standard library
+   only, except that the `cryptography` package may be used for cryptographic primitives (none are
+   needed here). Everything else, including a WebSocket client, is ours or a sibling by path; the
+   WebSocket question is an owner decision in ROADMAP.md section 5.
 5. **Scope.** What is deliberately absent is listed under Non-goals in `README.md`.
    An agent that "helpfully" implements a non-goal has expanded the API surface that
    has to be supported forever.
 
 ## Read before implementing
 
-- RFC 6396 carries 2 verified errata.
+- RFC 6396 carries 2 verified errata (Appendix A bytes); RFC 8050 adds the ADD-PATH subtypes and is in the spine.
 - RIS and RouteViews are operational services, not specifications: pin the endpoint and message version in tests and expect change without notice.
 
 ## Protocol work

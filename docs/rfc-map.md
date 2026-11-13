@@ -3,6 +3,7 @@
 | Document | Status | Published | Verified against the publisher record on |
 |---|---|---|---|
 | RFC 6396 | Proposed Standard | 2011-10 | 2026-11-05 |
+| RFC 8050 | Proposed Standard, current, no errata (read 2026-11-13) | 2017-05 | 2026-11-13 |
 | RIPE RIS live API | operational practice | - | 2026-11-05 |
 | RouteViews archive layout | operational practice | - | 2026-11-05 |
 
