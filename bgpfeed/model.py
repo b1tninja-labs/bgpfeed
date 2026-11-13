@@ -34,6 +34,8 @@ __all__ = [
     "GapReport",
     "Network",
     "Peer",
+    "RibView",
+    "SessionState",
 ]
 
 Address = ipaddress.IPv4Address | ipaddress.IPv6Address
@@ -48,12 +50,40 @@ class EventKind(enum.StrEnum):
     PEER_STATE = "peer-state"
 
 
+class RibView(enum.StrEnum):
+    """Which RIB a BMP route came from (RFC 7854 section 2, RFC 8671 section 4, RFC 9069 section 4).
+
+    The pre- and post-policy forms of Adj-RIB-In are the L flag, Adj-RIB-Out is the O flag (and
+    has both forms too), and Loc-RIB is peer type 3. MRT events carry no view (``None``).
+    """
+
+    ADJ_RIB_IN_PRE = "adj-rib-in-pre"
+    ADJ_RIB_IN_POST = "adj-rib-in-post"
+    ADJ_RIB_OUT_PRE = "adj-rib-out-pre"
+    ADJ_RIB_OUT_POST = "adj-rib-out-post"
+    LOC_RIB = "loc-rib"
+
+
+class SessionState(enum.StrEnum):
+    """A peering session going up or down, for a source that has no BGP FSM state numbers."""
+
+    UP = "up"
+    DOWN = "down"
+
+
 @dataclass(frozen=True)
 class Peer:
-    """The BGP speaker a route or a state change was seen from."""
+    """The BGP speaker a route or a state change was seen from.
 
-    address: Address
+    ``address`` is ``None`` for a peer that has none, the Loc-RIB Instance Peer of RFC 9069
+    section 5.1. ``distinguisher`` (RFC 7854 section 4.2) and ``bgp_id`` are set by BMP and
+    left ``None`` by MRT.
+    """
+
+    address: Address | None
     asn: int
+    distinguisher: bytes | None = None
+    bgp_id: ipaddress.IPv4Address | None = None
 
 
 @dataclass(frozen=True)
@@ -64,11 +94,17 @@ class Event:
     ``prefix`` is set; ``path_id`` is the RFC 7911 Path Identifier when the source used ADD-PATH;
     ``as_path`` is the raw AS_PATH attribute value of an announcement, ``None`` when the UPDATE had
     none, with ``four_octet_as`` giving the width of its AS numbers. For PEER_STATE, ``old_state``
-    and ``new_state`` are the BGP FSM state numbers of RFC 6396 section 4.4.1. ``reason`` is empty
-    except for a withdrawal that was not an explicit one, such as ``"treat-as-withdraw"``.
+    and ``new_state`` are the BGP FSM state numbers of RFC 6396 section 4.4.1; a source without
+    them (BMP Peer Up and Peer Down) sets ``session`` instead, and ``reason`` then says why a
+    session went down. ``reason`` is otherwise empty except for a withdrawal that was not an
+    explicit one, such as ``"treat-as-withdraw"``.
+
+    ``time`` is ``None`` when the source gave none (a BMP per-peer timestamp of zero, RFC 7854
+    section 4.2); otherwise it is aware UTC. ``view`` is the RIB a BMP route came from, ``None``
+    for MRT.
     """
 
-    time: datetime.datetime
+    time: datetime.datetime | None
     source: str
     peer: Peer
     kind: EventKind
@@ -79,13 +115,20 @@ class Event:
     old_state: int | None = None
     new_state: int | None = None
     reason: str = ""
+    view: RibView | None = None
+    session: SessionState | None = None
 
     def __post_init__(self) -> None:
-        if self.time.tzinfo is None or self.time.utcoffset() != datetime.timedelta(0):
-            raise ValueError("an Event time must be timezone-aware UTC")
+        if self.time is not None and (
+            self.time.tzinfo is None or self.time.utcoffset() != datetime.timedelta(0)
+        ):
+            raise ValueError("an Event time must be timezone-aware UTC, or None")
         if self.kind is EventKind.PEER_STATE:
-            if self.old_state is None or self.new_state is None:
-                raise ValueError("a PEER_STATE event needs old_state and new_state")
+            numbered = self.old_state is not None and self.new_state is not None
+            if not numbered and self.session is None:
+                raise ValueError("a PEER_STATE event needs old_state and new_state, or session")
+            if (self.old_state is None) != (self.new_state is None):
+                raise ValueError("old_state and new_state are given together")
             if self.prefix is not None:
                 raise ValueError("a PEER_STATE event has no prefix")
         elif self.prefix is None:

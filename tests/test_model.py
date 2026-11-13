@@ -1,3 +1,4 @@
+# ruff: noqa: PT018
 """The event model and the gap report (design: no RFC defines either)."""
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ import threading
 import pytest
 
 from bgpfeed.budget import DropCounter
-from bgpfeed.model import Event, EventKind, Gap, GapReport, Peer
+from bgpfeed.model import Event, EventKind, Gap, GapReport, Peer, RibView, SessionState
 
 UTC = datetime.UTC
 T0 = datetime.datetime(2026, 11, 12, 0, 0, tzinfo=UTC)
@@ -122,3 +123,25 @@ def test_drop_counter_is_thread_safe():
     for thread in threads:
         thread.join()
     assert counter.snapshot() == {"x": 16000}
+
+
+def test_a_bmp_event_may_have_no_time_no_peer_address_and_carries_view_and_peer_identity():
+    loc = Peer(None, 64500, distinguisher=bytes(8), bgp_id=ipaddress.IPv4Address("192.0.2.9"))
+    event = Event(None, "bmp", loc, EventKind.ANNOUNCE, prefix=NET, view=RibView.LOC_RIB)
+    assert event.time is None and event.peer.address is None
+    assert event.view is RibView.LOC_RIB and event.peer.bgp_id == ipaddress.IPv4Address("192.0.2.9")
+    # MRT events keep their shape: no view, no distinguisher, no session
+    mrt = Event(T0, "s", PEER, EventKind.ANNOUNCE, prefix=NET)
+    assert mrt.view is None and mrt.session is None
+    assert PEER.distinguisher is None and PEER.bgp_id is None
+    with pytest.raises(ValueError, match="UTC"):
+        Event(datetime.datetime(2026, 1, 1), "s", PEER, EventKind.ANNOUNCE, prefix=NET)
+
+
+def test_peer_state_without_fsm_numbers_needs_a_session_state():
+    up = Event(None, "bmp", PEER, EventKind.PEER_STATE, session=SessionState.UP)
+    assert up.old_state is None and up.new_state is None
+    down = Event(T0, "bmp", PEER, EventKind.PEER_STATE, session=SessionState.DOWN, reason="x")
+    assert down.session is SessionState.DOWN
+    with pytest.raises(ValueError, match="together"):
+        Event(T0, "s", PEER, EventKind.PEER_STATE, old_state=1, session=SessionState.UP)
