@@ -1,0 +1,52 @@
+{
+  "about": "Real archive directory listings parsed by tests/test_routeviews_corpus.py, and two updates files read by tests/test_mrt_corpus.py. Fetched by tools/fetch_corpus.py into a cache outside the repository; never vendored. Each pin is the page as served on the read date; a completed month is chosen so the listing should not grow, and a re-render by the operator shows up as a MISMATCH, never as a silent new pin.",
+  "files": [
+    {
+      "name": "routeviews-route-views2-2026.10-UPDATES.html",
+      "url": "https://archive.routeviews.org/bgpdata/2026.10/UPDATES/",
+      "kind": "Apache directory listing, RouteViews route-views2 updates for October 2026",
+      "read": "2026-11-13",
+      "terms": "RouteViews, https://www.routeviews.org/routeviews/ read 2026-11-13: data licensed CC BY 4.0, attribution to RouteViews and citation by DOI 10.7264/1y7v-2d90. Not vendored.",
+      "sha256": "c819cc68d2eb5dc2a350991cbe095ac0ac1a257b3f01313c23ba877919bf1cd6",
+      "size": 691192
+    },
+    {
+      "name": "routeviews-route-views2-2026.10-RIBS.html",
+      "url": "https://archive.routeviews.org/bgpdata/2026.10/RIBS/",
+      "kind": "Apache directory listing, RouteViews route-views2 RIBs for October 2026",
+      "read": "2026-11-13",
+      "terms": "RouteViews, https://www.routeviews.org/routeviews/ read 2026-11-13: CC BY 4.0, attribution to RouteViews, DOI 10.7264/1y7v-2d90. Not vendored.",
+      "sha256": "3a503c5052ff39b220ce5c1bf994602ef4047132635443d94edc9708c1524286",
+      "size": 84454
+    },
+    {
+      "name": "ris-rrc00-2026.10.html",
+      "url": "https://data.ris.ripe.net/rrc00/2026.10/",
+      "kind": "directory listing, RIPE RIS rrc00 updates and bviews for October 2026",
+      "read": "2026-11-13",
+      "terms": "RIPE NCC Website and Publicly Available RIPE NCC Services Terms of Service, https://www.ripe.net/about-us/legal/terms-of-service/ read 2026-11-13: article 3.5 forbids re-distribution unless the service permits it. Not vendored.",
+      "sha256": "0523463eee6b9f89b8465304e80ceb9e38c9f4238ff2790a25adabd6ff1690ae",
+      "size": 1055434
+    },
+    {
+      "name": "routeviews-route-views2-updates.20261112.0000.bz2",
+      "url": "https://archive.routeviews.org/bgpdata/2026.11/UPDATES/updates.20261112.0000.bz2",
+      "kind": "BGP4MP updates, 15 minutes",
+      "why": "route-views2 is the original multi-peer RouteViews collector; one 15-minute file, 1,667,418 octets by HEAD; the same bytes as asnkit's pin, so one shared cache directory serves both",
+      "read": "2026-11-13",
+      "terms": "RouteViews, https://www.routeviews.org/routeviews/ read 2026-11-13: CC BY 4.0, attribution to RouteViews, DOI 10.7264/1y7v-2d90. Not vendored.",
+      "sha256": "7ae4a8f406351d8c9bdefe58e9d54a7b0db477afb3aa4efc2e97a74d063191a1",
+      "size": 1667418
+    },
+    {
+      "name": "ris-rrc00-updates.20261112.0000.gz",
+      "url": "https://data.ris.ripe.net/rrc00/2026.11/updates.20261112.0000.gz",
+      "kind": "BGP4MP updates, 5 minutes",
+      "why": "rrc00 is the RIS multihop collector with peers worldwide; one 5-minute file, 5,876,534 octets by HEAD; rrc26 is 447,126 by HEAD; the same bytes as asnkit's pin, so one shared cache directory serves both",
+      "read": "2026-11-13",
+      "terms": "RIPE NCC Website and Publicly Available RIPE NCC Services Terms of Service, https://www.ripe.net/about-us/legal/terms-of-service/ read 2026-11-13: article 3.5 forbids re-distribution unless the service permits it; RIS commercial-use page requires acknowledging the RIPE NCC and RIPE RIS. The raw-data terms page linked from ripe.net returned 404. Not vendored.",
+      "sha256": "824f9ff95636d83b2a7479ae2737a97a923fe80c16e4da102dc2694483af8e84",
+      "size": 5876534
+    }
+  ]
+}

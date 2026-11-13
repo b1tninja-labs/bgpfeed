@@ -13,6 +13,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      # asnkit (MRT) and pathattr (BGP) are unpublished siblings; the sibling paths in pyproject.toml
+      # come out when they publish.
+      - uses: actions/checkout@v4
+        with:
+          repository: b1tninja/asnkit
+          path: .deps/asnkit
+      - uses: actions/checkout@v4
+        with:
+          repository: b1tninja/pathattr
+          path: .deps/pathattr
+      - run: python -m pip install --no-deps .deps/asnkit .deps/pathattr
       - run: python -m pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
@@ -39,6 +50,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      # asnkit (MRT) and pathattr (BGP) are unpublished siblings; the sibling paths in pyproject.toml
+      # come out when they publish.
+      - uses: actions/checkout@v4
+        with:
+          repository: b1tninja/asnkit
+          path: .deps/asnkit
+      - uses: actions/checkout@v4
+        with:
+          repository: b1tninja/pathattr
+          path: .deps/pathattr
+      - run: python -m pip install --no-deps .deps/asnkit .deps/pathattr
       - run: python -m pip install -e ".[dev]"
       - run: python -m pytest -q --cov
       # Asserts stripped: a wire path guarded by assert is unguarded in production.

@@ -57,7 +57,9 @@ rather than merely incomplete.
 4. **Dependencies.** `pyproject.toml` here declares no runtime dependencies. Standard library
    only, except that the `cryptography` package may be used for cryptographic primitives (none are
    needed here). Everything else, including a WebSocket client, is ours or a sibling by path; the
-   WebSocket question is an owner decision in ROADMAP.md section 5.
+   WebSocket question is an owner decision in ROADMAP.md section 5. The MRT codec is `asnkit` and the BGP
+   codec is `pathattr`, both resolved from `../asnkit` and `../pathattr` through pytest's `pythonpath` and
+   mypy's `mypy_path`; `rpslkit` imports `bgpfeed.budget` the same way, and the package namespace is lazy (PEP 562) so that import loads neither sibling. Real archive data is never vendored: `tools/fetch_corpus.py` fetches the pinned files of `tools/corpus.json` into a cache outside the tree (`BGPFEED_CORPUS_DIR`, else the user cache directory), one request per second, and the tests skip loudly without them. Files are found by SHA-256, so pointing `BGPFEED_CORPUS_DIR` and `ASNKIT_CORPUS_DIR` at one directory shares the updates files. The corpus tests take about 12 seconds and run with the default gates; fetch first with `python tools/fetch_corpus.py`.
 5. **Scope.** What is deliberately absent is listed under Non-goals in `README.md`.
    An agent that "helpfully" implements a non-goal has expanded the API surface that
    has to be supported forever.

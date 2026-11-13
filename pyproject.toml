@@ -65,11 +65,11 @@ path = "bgpfeed/__init__.py"
 packages = ["bgpfeed"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/bgpfeed/", "/tests/", "/docs/", "/README.md", "/ROADMAP.md", "/CHANGELOG.md", "/LICENSE", "/NOTICE"]
+include = ["/bgpfeed/", "/tests/", "/tools/fetch_corpus.py", "/tools/corpus.json", "/docs/", "/README.md", "/ROADMAP.md", "/CHANGELOG.md", "/LICENSE", "/NOTICE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "../asnkit", "../pathattr"]
 asyncio_mode = "auto"
 addopts = "-ra"
 
@@ -82,7 +82,7 @@ source = ["bgpfeed"]
 # coverage for the line that raises. Raise this in the commit that implements a
 # milestone, never in a commit that only adds tests, so the number keeps meaning
 # "this behaviour is exercised" rather than "this file was imported".
-fail_under = 45
+fail_under = 90
 show_missing = true
 exclude_lines = [
   "if __name__ == .__main__.:",
@@ -117,3 +117,4 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 no_implicit_optional = true
 ignore_missing_imports = true
+mypy_path = "../asnkit:../pathattr"

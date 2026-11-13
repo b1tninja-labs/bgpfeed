@@ -4,6 +4,10 @@ The operators of RIPE RIS and RouteViews publish their own usage terms; those ar
 sources, not RFCs, and no default rate here is taken from them. Every number is therefore a
 required argument: ``policy`` has no defaults to be aggressive by accident. The clock, the
 random generator and the sleep function are injectable so tests never wait.
+
+:class:`DropCounter` is the other half of politeness: whatever a stage chooses not to deliver
+(a queue that is full, a message it cannot read) is counted by reason, never lost without a
+trace.
 """
 
 from __future__ import annotations
@@ -11,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import random
+import threading
 import time
 from dataclasses import dataclass
 from datetime import timedelta
@@ -21,11 +26,45 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Budget",
+    "DropCounter",
     "Gate",
     "policy",
 ]
 
 _MAX_DOUBLINGS = 60
+
+
+class DropCounter:
+    """Counts dropped items by reason; thread-safe, and reads never reset anything.
+
+    A reason is a short non-empty string. ``snapshot`` returns the counts sorted by reason, so
+    a report is stable. There is no limit on the number of reasons: callers use a fixed
+    vocabulary, and a counter that silently stopped counting would be the failure it exists to
+    prevent.
+    """
+
+    def __init__(self) -> None:
+        self._counts: dict[str, int] = {}
+        self._lock = threading.Lock()
+
+    def count(self, reason: str, n: int = 1) -> None:
+        """Add ``n`` (at least 1) to ``reason``."""
+        if not isinstance(reason, str) or not reason:
+            raise ValueError("a drop reason must be a non-empty string")
+        if type(n) is not int or n < 1:
+            raise ValueError("n must be an integer of at least 1")
+        with self._lock:
+            self._counts[reason] = self._counts.get(reason, 0) + n
+
+    @property
+    def total(self) -> int:
+        with self._lock:
+            return sum(self._counts.values())
+
+    def snapshot(self) -> dict[str, int]:
+        """A copy of the counts, sorted by reason."""
+        with self._lock:
+            return dict(sorted(self._counts.items()))
 
 
 @dataclass(frozen=True)
